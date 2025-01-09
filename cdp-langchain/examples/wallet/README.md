@@ -34,6 +34,7 @@ Ensure the following vars are set in .env:
 
 - "CDP_API_KEY_NAME"
 - "CDP_API_KEY_PRIVATE_KEY"
+- "OPENAI_API_KEY"
 - "MNEMONIC_PHRASE"
 
 The mnemomic phrase example above can be used to validate wallet import functionality.
