@@ -65,7 +65,7 @@ def initialize_agent():
     # agent
     agent_config = {
         "configurable": {
-            "thread_id": "CDP AgentKit Chatbot Example!"
+            "thread_id": "CDP AgentKit Wallet Import Example!"
         }
     }
 
