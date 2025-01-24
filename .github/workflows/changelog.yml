@@ -1,0 +1,27 @@
+name: Changelog
+on: [pull_request]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      cdp-agentkit-core-python: ${{ steps.filter.outputs.cdp-agentkit-core-python }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cdp-agentkit-core-python:
+              - 'cdp-agentkit-core/python/**'
+
+  cdp-agentkit-core-python:
+    needs: changes
+    if: ${{ needs.changes.outputs.cdp-agentkit-core-python == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dangoslen/changelog-enforcer@v3
+        with:
+          changeLogPath: 'cdp-agentkit-core/python/CHANGELOG.md'
+          # skipLabels: 'Skip-Changelog'
