@@ -6,7 +6,11 @@ import { HumanMessage } from "@langchain/core/messages";
 import * as dotenv from "dotenv";
 import * as readline from "readline";
 
-import { AgentKit, twitterActionProvider } from "@coinbase/cdp-agentkit-core";
+import { AgentKit, ViemWalletProvider, twitterActionProvider } from "@coinbase/cdp-agentkit-core";
+
+import { createWalletClient, http } from "viem";
+import { baseSepolia } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
 
 dotenv.config();
 
@@ -21,6 +25,18 @@ const modifier = `
   Refrain from restating your tools' descriptions unless it is explicitly requested.
 `;
 
+const account = privateKeyToAccount(
+  "0x4c0883a69102937d6231471b5dbb6208ffd70c02a813d7f2da1c54f2e3be9f38",
+);
+
+const client = createWalletClient({
+  account,
+  chain: baseSepolia,
+  transport: http(),
+});
+
+const walletProvider = new ViemWalletProvider(client);
+
 /**
  * Initialize the agent with Twitter (X) Agentkit
  *
@@ -33,19 +49,10 @@ async function initialize() {
   // Initialize Twitter (X) action provider
   const twitter = twitterActionProvider();
 
-  if (!process.env.CDP_API_KEY_NAME) {
-    throw new Error("CDP_API_KEY_NAME is not set");
-  }
-
-  if (!process.env.CDP_API_KEY_PRIVATE_KEY) {
-    throw new Error("CDP_API_KEY_PRIVATE_KEY is not set");
-  }
-
   // Initialize AgentKit
   const agentKit = await AgentKit.from({
-    cdpApiKeyName: process.env.CDP_API_KEY_NAME,
-    cdpApiKeyPrivateKey: process.env.CDP_API_KEY_PRIVATE_KEY.replace(/\\n/g, "\n"),
     actionProviders: [twitter],
+    walletProvider: walletProvider,
   });
 
   // Retrieve actions
