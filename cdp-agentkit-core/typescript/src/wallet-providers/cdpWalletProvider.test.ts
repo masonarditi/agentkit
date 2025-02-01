@@ -29,7 +29,7 @@ describe("CdpWalletProvider", () => {
     jest.spyOn(Wallet, "import").mockResolvedValue(mockWallet);
     jest
       .spyOn(WalletProvider.prototype, "trackInitialization" as keyof WalletProvider)
-      .mockResolvedValue("0x" as `0x${string}`);
+      .mockResolvedValue(Promise.resolve(BigInt(0)));
   });
 
   afterEach(() => {
