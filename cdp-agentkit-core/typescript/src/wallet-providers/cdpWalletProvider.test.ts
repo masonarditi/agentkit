@@ -19,11 +19,6 @@ describe("CdpWalletProvider", () => {
   let mockWallet: jest.Mocked<Wallet>;
 
   beforeEach(async () => {
-    /*
-     * process.env.CDP_API_KEY_NAME = "test-key";
-     * process.env.CDP_API_KEY_PRIVATE_KEY = "test-private-key";
-     */
-
     mockWallet = {
       getDefaultAddress: jest.fn().mockResolvedValue({ getId: () => MOCK_ADDRESS }),
       getNetworkId: jest.fn().mockReturnValue(MOCK_NETWORK_ID),
@@ -39,10 +34,6 @@ describe("CdpWalletProvider", () => {
 
   afterEach(() => {
     jest.resetAllMocks();
-    /*
-     * delete process.env.CDP_API_KEY_NAME;
-     * delete process.env.CDP_API_KEY_PRIVATE_KEY;
-     */
   });
 
   describe("exportWallet", () => {
