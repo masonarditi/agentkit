@@ -3,19 +3,24 @@
 
 import { Decimal } from "decimal.js";
 import {
+  PublicClient,
   ReadContractParameters,
   ReadContractReturnType,
-  serializeTransaction,
   TransactionRequest,
   TransactionSerializable,
+  createPublicClient,
+  http,
   keccak256,
+  serializeTransaction,
 } from "viem";
 import { EvmWalletProvider } from "./evmWalletProvider";
 import { Network } from "../network";
+import { NETWORK_ID_TO_CHAIN_ID, NETWORK_ID_TO_VIEM_CHAIN } from "../network/network";
 import {
   Coinbase,
   CreateERC20Options,
   CreateTradeOptions,
+  ExternalAddress,
   SmartContract,
   Trade,
   Wallet,
@@ -23,7 +28,6 @@ import {
   hashTypedDataMessage,
   hashMessage,
 } from "@coinbase/coinbase-sdk";
-import { NETWORK_ID_TO_CHAIN_ID } from "../network/network";
 
 /**
  * Configuration options for the CdpActionProvider.
@@ -56,6 +60,7 @@ export class CdpWalletProvider extends EvmWalletProvider {
   #cdpWallet?: Wallet;
   #address?: string;
   #network?: Network;
+  #publicClient?: PublicClient;
 
   /**
    * Constructs a new CdpWalletProvider.
@@ -103,12 +108,17 @@ export class CdpWalletProvider extends EvmWalletProvider {
       throw new Error(`Failed to initialize wallet: ${error}`);
     }
 
-    cdpWalletProvider.#address = (await cdpWalletProvider.#cdpWallet?.getDefaultAddress())?.getId();
+    cdpWalletProvider.#address = (await cdpWalletProvider.#cdpWallet.getDefaultAddress())?.getId();
     cdpWalletProvider.#network = {
       protocolFamily: "evm" as const,
-      chainId: NETWORK_ID_TO_CHAIN_ID[cdpWalletProvider.#cdpWallet?.getNetworkId()],
-      networkId: cdpWalletProvider.#cdpWallet?.getNetworkId(),
+      chainId: NETWORK_ID_TO_CHAIN_ID[networkId],
+      networkId: networkId,
     };
+
+    cdpWalletProvider.#publicClient = createPublicClient({
+      chain: NETWORK_ID_TO_VIEM_CHAIN[networkId],
+      transport: http(),
+    });
 
     return cdpWalletProvider;
   }
@@ -178,8 +188,138 @@ export class CdpWalletProvider extends EvmWalletProvider {
    * @returns The hash of the transaction.
    */
   async sendTransaction(transaction: TransactionRequest): Promise<`0x${string}`> {
-    // TODO: Implement
-    throw Error("Unimplemented");
+    if (!this.#cdpWallet) {
+      throw new Error("Wallet not initialized");
+    }
+
+    try {
+      const preparedTransaction = await this.prepareTransaction(
+        transaction.to!,
+        transaction.value!,
+        transaction.data!,
+      );
+
+      // console.log("preparedTransaction", preparedTransaction);
+      // // const transactionHex = await this.convertToSignableHex(preparedTransaction);
+      // const transactionHex = serializeTransaction(preparedTransaction as TransactionSerializable);
+      // console.log("transactionHex", transactionHex);
+      // const transactionHash = keccak256(transactionHex);
+
+      const signature = await this.signTransaction({
+        ...preparedTransaction,
+        data: undefined,
+      } as unknown as TransactionRequest);
+      console.log("signature", signature);
+
+      const externalAddress = new ExternalAddress(this.#cdpWallet.getNetworkId(), this.#address!);
+      console.log("broadcasting with:", {
+        networkId: this.#cdpWallet.getNetworkId(),
+        addressId: this.#address,
+        signature: signature,
+      });
+
+      const tx = await externalAddress
+        .broadcastExternalTransaction(signature!)
+        .catch(error => {
+          console.error("Broadcast error:", error);
+          throw error;
+        });
+
+      return tx.transactionHash as `0x${string}`;
+    } catch (error) {
+      console.error("Send transaction error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Prepares a transaction.
+   *
+   * @param to - The address to send the transaction to.
+   * @param value - The value of the transaction.
+   * @param data - The data of the transaction.
+   * @returns The prepared transaction.
+   */
+  async prepareTransaction(
+    to: `0x${string}`,
+    value: bigint,
+    data: `0x${string}`,
+  ): Promise<TransactionSerializable> {
+    if (!this.#cdpWallet) {
+      throw new Error("Wallet not initialized");
+    }
+
+    const nonce = await this.#publicClient!.getTransactionCount({
+      address: this.#address! as `0x${string}`,
+    });
+
+    const gasPrice = await this.#publicClient!.getGasPrice();
+    const gas = await this.#publicClient!.estimateGas({
+      to,
+      value,
+      data,
+    });
+
+    return {
+      to,
+      value,
+      data,
+      nonce,
+      gasPrice,
+      gas,
+      type: "legacy",
+    };
+  }
+
+  /**
+   * Converts a TransactionRequest into a signable hex string using Viem.
+   *
+   * @param transaction - The transaction request to convert.
+   * @returns A signable hex string.
+   */
+  async convertToSignableHex(transaction: TransactionSerializable): Promise<string> {
+    console.log("transaction", transaction);
+    const { to, value, data, nonce, gasPrice, gas } = transaction;
+
+    const encodedTransaction = serializeTransaction({
+      to,
+      value,
+      data,
+      nonce,
+      gasPrice,
+      gas,
+      type: "legacy",
+    } as TransactionSerializable);
+
+    console.log("encodedTransaction", encodedTransaction);
+    return encodedTransaction;
+  }
+
+  /**
+   * Adds signature to a transaction and serializes it for broadcast.
+   *
+   * @param transaction - The transaction to sign.
+   * @param signature - The signature to add to the transaction.
+   * @returns A serialized transaction.
+   */
+  async addSignatureAndSerialize(
+    transaction: TransactionSerializable,
+    signature: `0x${string}`,
+  ): Promise<string> {
+    // Decode the signature into its components
+    const r = `0x${signature.slice(2, 66)}`; // First 32 bytes
+    const s = `0x${signature.slice(66, 130)}`; // Next 32 bytes
+    const v = BigInt(parseInt(signature.slice(130, 132), 16)); // Last byte
+
+    const signedTransaction = {
+      ...transaction,
+      r,
+      s,
+      v,
+      type: "legacy" as const,
+    };
+
+    return serializeTransaction(signedTransaction as unknown as TransactionSerializable);
   }
 
   /**

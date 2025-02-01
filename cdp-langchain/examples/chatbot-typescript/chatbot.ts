@@ -8,6 +8,7 @@ import * as readline from "readline";
 
 import {
   AgentKit,
+  CdpWalletProvider,
   ViemWalletProvider,
   cdpApiActionProvider,
   erc721ActionProvider,
@@ -26,6 +27,55 @@ dotenv.config();
  * @returns Agent executor and config
  */
 async function initializeAgent() {
+  const walletProvider = await CdpWalletProvider.configureWithWallet({
+    apiKeyName: process.env.CDP_API_KEY_NAME,
+    apiKeyPrivateKey: process.env.CDP_API_KEY_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    networkId: "base-sepolia",
+    mnemonicPhrase: process.env.MNEMONIC_PHRASE,
+  });
+
+  console.log(await walletProvider.signMessage("hello, world!"));
+
+  // Test signTypedData
+  console.log("Testing signTypedData...");
+  const typedData = {
+    domain: {
+      name: "Test Domain",
+      version: "1",
+      chainId: 84532, // Base Sepolia
+    },
+    types: {
+      Person: [
+        { name: "name", type: "string" },
+        { name: "wallet", type: "address" },
+      ],
+    },
+    message: {
+      name: "Bob",
+      wallet: "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+    },
+  };
+  console.log(await walletProvider.signTypedData(typedData));
+
+  // Test signTransaction
+  console.log("Testing signTransaction...");
+  const transaction = {
+    to: "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" as `0x${string}`,
+    value: BigInt(1000000000000000),
+    chainId: 84532,
+    type: "legacy" as const,
+    gasPrice: BigInt(1000000000), // 1 gwei
+  };
+  console.log(await walletProvider.signTransaction(transaction));
+
+  // Test sendTransaction
+  console.log("Testing sendTransaction...");
+  const sendTx = {
+    to: "0x08c050cb6b01e86cdb9787448ba70ca2e49f9973" as `0x${string}`,
+    value: BigInt(1), // 0.001 ETH
+  };
+  console.log(await walletProvider.sendTransaction(sendTx));
+
   try {
     // Initialize LLM
     const llm = new ChatOpenAI({
@@ -203,17 +253,21 @@ async function chooseMode(): Promise<"chat" | "auto"> {
   }
 }
 
-const account = privateKeyToAccount(
-  "0x4c0883a69102937d6231471b5dbb6208ffd70c02a813d7f2da1c54f2e3be9f38",
-);
+/*
+ * const account = privateKeyToAccount(
+ *   "0x4c0883a69102937d6231471b5dbb6208ffd70c02a813d7f2da1c54f2e3be9f38",
+ * );
+ */
 
-const client = createWalletClient({
-  account,
-  chain: baseSepolia,
-  transport: http(),
-});
+/*
+ * const client = createWalletClient({
+ *   account,
+ *   chain: baseSepolia,
+ *   transport: http(),
+ * });
+ */
 
-const walletProvider = new ViemWalletProvider(client);
+// const walletProvider = new ViemWalletProvider(client);
 
 /**
  * Start the chatbot agent
