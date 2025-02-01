@@ -5,8 +5,10 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import * as dotenv from "dotenv";
 import * as readline from "readline";
+import { promises as fs } from "fs";
+import path from "path";
 
-import { AgentKit, ViemWalletProvider, farcasterActionProvider } from "@coinbase/cdp-agentkit-core";
+import { AgentKit, CdpWalletProvider, farcasterActionProvider } from "@coinbase/cdp-agentkit-core";
 
 import { createWalletClient, http } from "viem";
 import { baseSepolia } from "viem/chains";
@@ -25,18 +27,6 @@ const modifier = `
   Refrain from restating your tools' descriptions unless it is explicitly requested.
 `;
 
-const account = privateKeyToAccount(
-  "0x4c0883a69102937d6231471b5dbb6208ffd70c02a813d7f2da1c54f2e3be9f38",
-);
-
-const client = createWalletClient({
-  account,
-  chain: baseSepolia,
-  transport: http(),
-});
-
-const walletProvider = new ViemWalletProvider(client);
-
 /**
  * Initialize the agent with Farcaster Agentkit
  *
@@ -45,6 +35,15 @@ const walletProvider = new ViemWalletProvider(client);
 async function initialize() {
   // Initialize LLM
   const llm = new ChatOpenAI({ model: "gpt-4o-mini" });
+
+  // Define CDP Wallet options
+  const walletOptions = {
+    mnemonicPhrase: process.env.MNEMONIC_PHRASE,
+    walletData: process.env.WALLET_DATA,
+  };
+
+  // Initialize CDP Wallet provider
+  const walletProvider = CdpWalletProvider.configureWithWallet(walletOptions);
 
   // Initialize Farcaster action provider
   const farcaster = farcasterActionProvider();
