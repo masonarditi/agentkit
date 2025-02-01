@@ -24,6 +24,7 @@ import {
   hashMessage,
 } from "@coinbase/coinbase-sdk";
 import { NETWORK_ID_TO_CHAIN_ID } from "../network/network";
+
 /**
  * Configuration options for the CdpActionProvider.
  */
@@ -37,17 +38,6 @@ export interface CdpWalletProviderConfig {
    * CDP API Key Private Key.
    */
   apiKeyPrivateKey?: string;
-
-  /**
-   *
-   */
-  wallet?: Wallet;
-
-  address?: string;
-
-  network?: Network;
-
-  networkId?: string;
 }
 
 /**
@@ -66,7 +56,6 @@ export class CdpWalletProvider extends EvmWalletProvider {
   #cdpWallet?: Wallet;
   #address?: string;
   #network?: Network;
-  #publicClient?: PublicClient;
 
   /**
    * Constructs a new CdpWalletProvider.
@@ -76,13 +65,11 @@ export class CdpWalletProvider extends EvmWalletProvider {
   private constructor(config: CdpWalletProviderConfig) {
     super();
 
-    this.#cdpWallet = config.wallet;
-    this.#address = config.address;
-    this.#network = config.network;
-    this.#publicClient = createPublicClient({
-      chain: NETWORK_ID_TO_VIEM_CHAIN[config.networkId!],
-      transport: http(),
-    });
+    if (config.apiKeyName && config.apiKeyPrivateKey) {
+      Coinbase.configure({ apiKeyName: config.apiKeyName, privateKey: config.apiKeyPrivateKey });
+    } else {
+      Coinbase.configureFromJson();
+    }
   }
 
   /**
@@ -95,13 +82,7 @@ export class CdpWalletProvider extends EvmWalletProvider {
   public static async configureWithWallet(
     config: ConfigureCdpAgentkitWithWalletOptions = {},
   ): Promise<CdpWalletProvider> {
-    if (config.apiKeyName && config.apiKeyPrivateKey) {
-      Coinbase.configure({ apiKeyName: config.apiKeyName, privateKey: config.apiKeyPrivateKey });
-    } else {
-      Coinbase.configureFromJson();
-    }
-
-    let cdpWallet: Wallet;
+    const cdpWalletProvider = new CdpWalletProvider(config);
 
     const mnemonicPhrase = config.mnemonicPhrase || process.env.MNEMONIC_PHRASE;
     const networkId = config.networkId || process.env.NETWORK_ID || Coinbase.networks.BaseSepolia;
@@ -109,30 +90,25 @@ export class CdpWalletProvider extends EvmWalletProvider {
     try {
       if (config.cdpWalletData) {
         const walletData = JSON.parse(config.cdpWalletData) as WalletData;
-        cdpWallet = await Wallet.import(walletData);
+        cdpWalletProvider.#cdpWallet = await Wallet.import(walletData);
       } else if (mnemonicPhrase) {
-        cdpWallet = await Wallet.import({ mnemonicPhrase: mnemonicPhrase }, networkId);
+        cdpWalletProvider.#cdpWallet = await Wallet.import(
+          { mnemonicPhrase: mnemonicPhrase },
+          networkId,
+        );
       } else {
-        cdpWallet = await Wallet.create({ networkId: networkId });
+        cdpWalletProvider.#cdpWallet = await Wallet.create({ networkId: networkId });
       }
     } catch (error) {
       throw new Error(`Failed to initialize wallet: ${error}`);
     }
 
-    const address = (await cdpWallet.getDefaultAddress())?.getId();
-
-    const network = {
+    cdpWalletProvider.#address = (await cdpWalletProvider.#cdpWallet?.getDefaultAddress())?.getId();
+    cdpWalletProvider.#network = {
       protocolFamily: "evm" as const,
-      chainId: NETWORK_ID_TO_CHAIN_ID[networkId],
-      networkId: networkId,
+      chainId: NETWORK_ID_TO_CHAIN_ID[cdpWalletProvider.#cdpWallet?.getNetworkId()],
+      networkId: cdpWalletProvider.#cdpWallet?.getNetworkId(),
     };
-
-    const cdpWalletProvider = new CdpWalletProvider({
-      wallet: cdpWallet,
-      address: address,
-      network: network,
-      networkId,
-    });
 
     return cdpWalletProvider;
   }
