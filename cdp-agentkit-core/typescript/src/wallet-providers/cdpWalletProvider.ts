@@ -114,6 +114,19 @@ export class CdpWalletProvider extends EvmWalletProvider {
   }
 
   /**
+   * Exports the wallet.
+   *
+   * @returns The wallet's data.
+   */
+  async exportWallet(): Promise<WalletData> {
+    if (!this.#cdpWallet) {
+      throw new Error("Wallet not initialized");
+    }
+
+    return this.#cdpWallet.export();
+  }
+
+  /**
    * Signs a message.
    *
    * @param message - The message to sign.
